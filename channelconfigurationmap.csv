@@ -1,0 +1,41 @@
+Label,Default Value,Bits
+Set trigger_mode_1,0b00
+debug_mode,0b00
+sync_chain_length,0b00
+dead_time,0b000000
+counter_mode,0b0000
+tac_max_age,0b11110
+tac_min_age,0b01010
+Set trigger_mode_2_t,0b01
+Set trigger_mode_2_e,0b010
+Set trigger_mode_2_q,0b01
+Set trigger_mode_2_b,0b101
+branch_en_eq,0b1
+branch_en_t,0b1
+qdc_mode,0b1
+Set trigger_b_latched,0b0
+min_intg_time,0b0100010
+max_intg_time,0b0100010
+output_en,0b00
+qtx2_en,0b0
+baseline_t,0b111101
+vth_t1,0b111000
+vth_t2,0b101111
+vth_e,0b010011
+baseline_e,0b110
+fe_delay,0b01110
+postamp_gain_t,0b00
+postamp_gain_e,0b00
+postamp_sh_e,0b00
+intg_en,0b1
+intg_signal_en,0b1
+att,0b001
+tdc_current_t,0b0000
+tdc_current_e,0b0000
+fe_tp_en,0b00
+n/u,0b1
+integ_source_sw,0b00
+t1_hysteresis,0b010
+t2_hysteresis,0b010
+e_hysteresis,0b010
+hysteresis_en_n,0b1
