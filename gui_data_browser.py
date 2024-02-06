@@ -1,10 +1,10 @@
 import sys,os
 import matplotlib
-matplotlib.use('Qt5Agg')
+matplotlib.use('QtAgg')
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import Qt
+from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import Qt
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
@@ -110,7 +110,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # 3. Channel selection and Plot options
         self.list_channels = QListWidget()
-        self.list_channels.setSelectionMode(QAbstractItemView.MultiSelection)
+        self.list_channels.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         self.list_channels.itemSelectionChanged.connect(self.updateSettings)
         self.text_fileinfo = QTextBrowser()
         self.text_fileinfo.setText("File info:")
@@ -281,7 +281,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 h = MainWindow.plot_hist(self.ROOTFILE.data, self.variable_selected, bins=np.linspace(0,384, 385))    
                 # current_yscale = self.sc.axes.get_yscale()
                 self.sc.axes.clear()
-                self.sc.axes.step(h[1][:-1], h[0], label=f"All channels")              
+                self.sc.axes.step(np.array(h[1][:-1]), np.array(h[0]), label=f"All channels")              
                 self.sc.axes.set_xlabel("Channel ID")
                 self.sc.axes.set_ylabel("Counts per channel")
                 self.sc.axes.legend()
@@ -326,7 +326,7 @@ class MainWindow(QtWidgets.QMainWindow):
         current_yscale = self.sc.axes.get_yscale()
         self.sc.axes.clear()
         for i,h in enumerate(all_hists):
-            self.sc.axes.step(h[1][:-1], h[0], label=f"{channels[i]}")              
+            self.sc.axes.step(np.array(h[1][:-1]), np.array(h[0]), label=f"{channels[i]}")              
         self.sc.axes.set_xlabel(key)
         self.sc.axes.set_ylabel("counts")
         self.sc.axes.legend()
@@ -362,7 +362,7 @@ if __name__ == "__main__":
 
     main = MainWindow()
     main.resize(950, 500)
-    main.move(app.desktop().screen().rect().center() - main.rect().center())
+    # main.move(app.desktop().screen().rect().center() - main.rect().center())
     main.show()
 
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
