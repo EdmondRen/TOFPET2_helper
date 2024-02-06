@@ -1,0 +1,3 @@
+[submodule "Mu-Helper"]
+	path = Mu-Helper
+	url = https://github.com/EdmondRen/Mu-Helper.git
