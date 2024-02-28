@@ -1,2 +1,5 @@
 petsys/__pycache__/*
 petsys/__pycache__/
+petsysbuild/__pycache__/
+petsysbuild/petsys/__pycache__/
+
