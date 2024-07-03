@@ -3,3 +3,8 @@ petsys/__pycache__/
 petsysbuild/__pycache__/
 petsysbuild/petsys/__pycache__/
 
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info

@@ -1,0 +1,47 @@
+{
+    "global":{
+        "bar_width":	4,
+        "bar_thickness":	1,
+        "bar_length":	100,
+        "bar_pair_separation":	5,
+        "bars_per_assembly":	20,
+        "bars_pcb_time_offset": [2.735810131,2.455931857,2.169056626,1.889178352,1.609300077,1.280443105,1.007561787,0.7276835132,0.4617991526,0.1679269646,0.3148630586,0.636723074,0.9305952621,1.20347658,1.476357897,1.805214869,2.099087057,2.364971418,2.644849692,2.868752312],
+        "assembly_width": 80,
+
+        "time_resolution":	1,
+        "fiber_refraction_index":	1.77,
+
+        "num_layers":	4
+
+    },
+    "assemblies":{
+        "1":{
+            "layer":1,
+            "asic_breakout_port":1,
+            "reference_point": [56.7, -38, 0],
+            "direction":[-1,3],
+            "cable_time_offset":9.6
+        },
+        "2":{
+            "layer":2,
+            "asic_breakout_port":2,
+            "reference_point": [-38, -56.7,  100],
+            "direction":[2,3],
+            "cable_time_offset":4.8
+        },
+        "3":{
+            "layer":3,
+            "asic_breakout_port":3,
+            "reference_point": [56.7, -38, 150],
+            "direction":[-1,3],
+            "cable_time_offset":4.8
+        },
+        "4":{
+            "layer":4,
+            "asic_breakout_port":4,
+            "reference_point": [-38, -56.7, 200],
+            "direction":[2,3],
+            "cable_time_offset":9.6
+        }                         
+    }
+}
