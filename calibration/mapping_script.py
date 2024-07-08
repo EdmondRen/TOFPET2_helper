@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,24 +12,37 @@ from IPython.display import display
 import json
 from array import array
 import argparse
+import os, sys
+import shutil
 
-id_mapping = "../configurations/MATHUSLA teststand pinout - Preamp to ASIC.csv" #asic mappings
-inputs_path = "../configurations/teststand_config.json" #module info
-pair_info = "../configurations/MATHUSLA teststand pinout - Channel_pair.csv" #pair information
+path_id_mapping = "../configurations/MATHUSLA teststand pinout - Preamp to ASIC.csv" #asic mappings
+path_teststand_config = "../configurations/teststand_config.json" #module info
+path_pair_info = "../configurations/MATHUSLA teststand pinout - Channel_pair.csv" #pair information
 
+
+# Handel input arguments
 parser = argparse.ArgumentParser(
                     prog='Mapper Script',
                     description='Maps raw data to coordinates',
                     epilog='MATHUSLA 2024')
 parser.add_argument('filepath')
-parser.add_argument('mapped_filepath')
-
+parser.add_argument('mapped_filepath', help="output directory or full filename. If a filename is given, it must has extension of root. If a directory is given, the output file will be renamed as INPUTFILENAME_hit.root")
 args = parser.parse_args()
+
+# File paths
 filepath = args.filepath
-mapped_filepath = args.mapped_filepath
+filename = os.path.basename(filepath)
+if args.mapped_filepath[-5:]!=".root":
+    mapped_filepath = args.mapped_filepath + filename.replace(".root", "_hit.root")
+else:
+    mapped_filepath = args.mapped_filepath
+os.makedirs(os.path.dirname(mapped_filepath), exist_ok=True)
+# Also copy the teststand config file to output
+shutil.copy(path_teststand_config, mapped_filepath.replace(".root", "_config.json"))
+
 
 idmap = {}
-with open(id_mapping) as id_map_file:
+with open(path_id_mapping) as id_map_file:
     linecount = 0
     id_reader = csv.reader(id_map_file, delimiter=',')
     for row in id_reader:
@@ -39,12 +53,16 @@ with open(id_mapping) as id_map_file:
             linecount += 1
             idmap[int(row[7])] = [int(row[11]),int(row[1]),int(row[9]),int(row[10])]
 
-input_file = open(inputs_path)
+input_file = open(path_teststand_config)
 inputs = json.load(input_file)
 input_file.close()
 
+pos_unc = [inputs["global"]["time_resolution"]/np.sqrt(2)*29.979/inputs["global"]["fiber_refraction_index"],
+           inputs["global"]["bar_width"]/np.sqrt(12),
+           inputs["global"]["bar_thickness"]/np.sqrt(12)] 
+
 pair_details = {}
-with open(pair_info) as pair_info_file:
+with open(path_pair_info) as pair_info_file:
     linecount = 0
     pair_reader = csv.reader(pair_info_file, delimiter=',')
     for row in pair_reader:
@@ -88,7 +106,7 @@ def hit_coord(t1,t2,pair_id,pair_details,inputs):
     total_t = pair_details[pair_id][4]/c_wsf
     t = (total_t - time_dif)/2
     hit_d = c_wsf * t
-    hit_t = (t1+t2)/2 #min(t1,t2) - t
+    hit_t = min(t1,t2) - t
     return hit_d,hit_t
 
 def lev_civ(indices):
@@ -137,7 +155,7 @@ def mapper2(hi_ass,lo_ass,hi_ch,lo_ch,hi_id,lo_id,hi_t,lo_t,pair_id,idmap,inputs
     ref_coord = [inputs["assemblies"][str(hi_ass)]["reference_point"][0],inputs["assemblies"][str(hi_ass)]["reference_point"][1],inputs["assemblies"][str(hi_ass)]["reference_point"][2]]
     assembly_width = inputs["global"]["assembly_width"]
     bar_width = inputs["global"]["bar_width"]
-    pos_unc = [0,0,0] #add uncertainties later
+    
     t_unc = inputs["global"]["time_resolution"]
     if hi_t_adj >= lo_t_adj:
         hit_det_id = lo_id
@@ -157,7 +175,7 @@ def mapper2(hi_ass,lo_ass,hi_ch,lo_ch,hi_id,lo_id,hi_t,lo_t,pair_id,idmap,inputs
         final_coords[ind_map[i]] = signed_coord[i]
         final_uncerts[ind_map[i]] = pos_unc[i] 
     final_coords += np.array(ref_coord)
-    return final_coords[0],final_coords[1],final_coords[2],hit_t,final_uncerts[0],final_uncerts[1],final_uncerts[2],t_unc,int(hi_ass),int(hit_det_id),int(pair_id)
+    return final_coords[0],final_coords[1],final_coords[2],hit_t,final_uncerts[0],final_uncerts[1],final_uncerts[2],t_unc,int(hi_ass),int(hit_det_id),int(pair_id),hit_ch
 
 tfile = ROOT.TFile.Open(filepath)
 tree_name = tfile.GetListOfKeys()[0].GetName()
@@ -177,6 +195,7 @@ hitzerr = array('f',[ 0 ])
 hitterr = array('f',[ 0 ])
 hitass = array('i',[ 0 ])
 hitdetid = array('i',[ 0 ])
+hitchid = array('i',[ 0 ])
 hitpairid = array('i',[ 0 ])
 hitnrg1 = array('f',[ 0 ])
 hitnrg2 = array('f',[ 0 ])
@@ -190,21 +209,27 @@ mapped_tree.Branch("hit_z_err",hitzerr,"leafname/F")
 mapped_tree.Branch("hit_t_err",hitterr,"leafname/F")
 mapped_tree.Branch("hit_ass",hitass,"leafname/I")
 mapped_tree.Branch("hit_det_id",hitdetid,"leafname/I")
+mapped_tree.Branch("hit_ch_id",hitchid,"leafname/I")
 mapped_tree.Branch("hit_pair_id",hitpairid,"leafname/I")
 mapped_tree.Branch("hit_nrg1",hitnrg1,"leafname/F")
 mapped_tree.Branch("hit_nrg2",hitnrg2,"leafname/F")
 
+nprint = 20
+entries_print = entries//nprint
 for x in range(entries):
+    if (x-1)%(entries_print)==entries_print-1:
+        print(f"{x}/{entries} events ({x/entries*100:.1f}%)", end="\r")
     Tree.GetEntry(x)
     hi_ass,hichannel = ass_ch(Tree.channelID1,idmap)
     lo_ass,lochannel = ass_ch(Tree.channelID2,idmap)
     if checkhit(hi_ass,lo_ass,hichannel,lochannel)==1:
         hi_detid,hi_pairid=det_pair(Tree.channelID1,idmap)
         lo_detid,lo_pairid=det_pair(Tree.channelID2,idmap)
-        hitx[0],hity[0],hitz[0],hitt[0],hitxerr[0],hityerr[0],hitzerr[0],hitterr[0],hitass[0],hitdetid[0],hitpairid[0]=mapper2(hi_ass,lo_ass,hichannel,lochannel,hi_detid,lo_detid,Tree.time1,Tree.time2,hi_pairid,idmap,inputs,pair_details)
+        hitx[0],hity[0],hitz[0],hitt[0],hitxerr[0],hityerr[0],hitzerr[0],hitterr[0],hitass[0],hitdetid[0],hitpairid[0],hitchid[0]=mapper2(hi_ass,lo_ass,hichannel,lochannel,hi_detid,lo_detid,Tree.time1,Tree.time2,hi_pairid,idmap,inputs,pair_details)
         hitnrg1[0] = Tree.energy1
         hitnrg2[0] = Tree.energy2
         mapped_tree.Fill()
+print("\nFinished, file saved as ", mapped_filepath)
 mapped_tree.Write()
 tfile.Close()
 newFile.Close()
