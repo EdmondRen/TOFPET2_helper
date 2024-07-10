@@ -187,10 +187,13 @@ class Config:
 					cc.setValue("qdc_mode", 1)
 					cc.setValue("intg_en", 1)
 					cc.setValue("intg_signal_en", 1)
+
+
+			
 			      
 					
 					
-		daqd.setAsicsConfig(asicsConfig)
+		daqd.setAsicsConfig(asicsConfig)			
 
 
 		daqd.disableCoincidenceTrigger()
@@ -225,9 +228,6 @@ class Config:
 					daqd.write_config_register(portID, slaveID, 10, 0x0604,  self.__hw_trigger["threshold"])
 			
 			# WARNING missing DAQ trigger setup
-
-		
-			
 
 		return None
 	

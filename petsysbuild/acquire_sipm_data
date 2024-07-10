@@ -61,6 +61,7 @@ activeChannels = [ (portID, slaveID, chipID, channelID) for channelID in range(6
 
 asicsConfig = daqd.getAsicsConfig()
 
+
 if args.paramTable is None:
         daqd.acquire(args.time, 0, 0)
 else:
@@ -120,5 +121,6 @@ else:
 
 
 systemConfig.loadToHardware(daqd, bias_enable=config.APPLY_BIAS_OFF)
+	
 
 

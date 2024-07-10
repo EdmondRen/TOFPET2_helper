@@ -22,6 +22,8 @@ import subprocess
 from sys import stdout
 from copy import deepcopy
 import os
+from signal import signal, SIGPIPE, SIG_DFL
+# signal(SIGPIPE,SIG_DFL)
 
 MAX_PORTS = 32
 MAX_SLAVES = 32

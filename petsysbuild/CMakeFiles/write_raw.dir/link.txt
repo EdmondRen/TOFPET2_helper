@@ -1,0 +1,1 @@
+/usr/bin/c++  -DLINUX  -pthread -std=c++17 -m64 -I/home/mathusla/root/include -O3 -DNDEBUG -rdynamic CMakeFiles/write_raw.dir/src/raw_data/write_raw.cpp.o CMakeFiles/write_raw.dir/src/raw_data/shm_raw.cpp.o -o write_raw  -lrt -lpthread 

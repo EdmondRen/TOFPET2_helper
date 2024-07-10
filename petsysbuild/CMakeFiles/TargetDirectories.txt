@@ -1,0 +1,16 @@
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/daqd.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/write_raw.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/shm_raw_py.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/monitor_py.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/common.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/process_tdc_calibration.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/process_qdc_calibration.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/convert_raw_to_raw.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/convert_raw_to_group.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/convert_raw_to_coincidence.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/convert_raw_to_singles.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/print_raw.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/merge_raw.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/online_monitor.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/edit_cache.dir
+/home/mathusla/tofpet/sw_daq_tofpet2-2023.12.06/build/CMakeFiles/rebuild_cache.dir
