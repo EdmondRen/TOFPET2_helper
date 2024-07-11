@@ -7,8 +7,11 @@ import signal
 
 import matplotlib
 matplotlib.use('QtAgg')
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
+from matplotlib.pyplot import *
+import matplotlib.pyplot as plt
+
 
 import sys
 from PyQt6 import QtCore, QtGui, QtWidgets
@@ -18,19 +21,17 @@ from PyQt6.QtCore import QProcess, Qt
 from PyQt6.QtWidgets import *
 
 
-class PlotCanvas(FigureCanvas):
+# Include some functions to make the data quality monitoring plots
+import joblib
+from processing import script_data_quality as dqm
 
-    def __init__(self, parent=None):
-        fig = Figure()
-        self.axes = fig.add_subplot(111)
-        super().__init__(fig)
-        self.setParent(parent)
-        self.plot()
 
-    def plot(self):
-        data = [1, 2, 3, 4, 5]
-        self.axes.plot(data, 'r-')
-        self.draw()
+class MplCanvas(FigureCanvasQTAgg):
+
+    def __init__(self, parent=None, width=8, height=4, dpi=100):
+        self.fig, self.axes = plt.subplots(2, 3, figsize=(width, height), dpi=dpi, tight_layout=True)
+        super(MplCanvas, self).__init__(self.fig)
+
 
 class MainWindow(QMainWindow):
 
@@ -42,9 +43,14 @@ class MainWindow(QMainWindow):
         self.__daqd_is_running=False
         self.__directory_set=False      
         self.__terminal_CR = False  
-        self.__CURRENT_RUN = 0
-        self.__RUN_FINISHED = "=================Run finished================"
-        self.__ACQUISITION_FINISHED = "=================Acquisition finished================"
+        self.__CURRENT_RUN = -1
+        self.__RUN_FINISHED_LABLE = "=================Run finished================"
+        self.__RUN_FINISHED_COUNTER = -1
+        self.__ACQUISITION_FINISHED_LABLE = "=================Acquisition finished================"
+        self.__ACQUISITION_ONGOING = False
+        self.__PROCESSING_FINISHED_LABLE = "===============Processing finished=================="
+        self.__PROCESSING_FINISHED = True
+        self.__PROCESSING_FINISHED_COUNTER =-1
         self.__PROCESSING_ENABLED=False
 
         self.setWindowTitle('TOFPET2 data recorder')
@@ -56,15 +62,16 @@ class MainWindow(QMainWindow):
         # Main layout
         main_layout = QVBoxLayout(central_widget)
 
+        #---------------------------------------------------------------------------------
         # Top layout for buttons and plot
         top_layout = QHBoxLayout()
-
+        #-------------------------------------------
         # Left side for buttons
         left_layout = QVBoxLayout()
+
         # Widget: Working directory select
         left_group1 = QGroupBox("Working directory")
         left_group1_vbox = QVBoxLayout()
-
         # Configuration
         self.btn_config_dir = QPushButton("Config dir")
         self.btn_config_dir.clicked.connect(self.set_config_dir)
@@ -85,11 +92,12 @@ class MainWindow(QMainWindow):
         left_group1_vbox.addWidget(self.btn_daqd_connect)  
         left_group1_vbox.setContentsMargins(0,0,0,0) 
         left_group1.setLayout(left_group1_vbox)  
+        # left_group1.setMaximumWidth(200) # Use this to limit the max width of the left_layout
 
         # Widget: Taking data
         left_group2 = QGroupBox("Data acquisation")
         left_group2_vbox = QVBoxLayout()
-        self.daq_setting={"mode":"TOT", "time":120, "HW trigger":True, "runs":1, "Running": False, "Series number auto": True, "Series number":"1"}
+        self.daq_setting={"mode":"TOT", "time":120, "HW trigger":True, "runs":1, "finished": False, "Series number auto": True, "Series number":"1"}
         # MODE
         hbox1 = QHBoxLayout()
         self.label_daq_mode = QLabel("Mode")
@@ -165,13 +173,38 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(left_group2) 
         left_layout.addStretch() 
 
-        # Right side for plot
-        self.plot_canvas = PlotCanvas()
+        #---------------------------------------------------
+        # Middle  for plot canvas
+        mid_layout = QVBoxLayout()
+        # self.plot_canvas = PlotCanvas()
+        self.sc = MplCanvas(self, width=5, height=4, dpi=100)
+        # self.sc.axes.plo([0,1,2,3,4], [10,1,20,3,40])
+        # Widget: Plot toolbar
+        toolbar = NavigationToolbar(self.sc, self) # toolbar, passing canvas as first parament, parent (self, the MainWindow) as second.
+        mid_layout.addWidget(toolbar)
+        mid_layout.addWidget(self.sc)
+
+        #---------------------------------------------------
+        # Right for plot control
+        right_layout=QVBoxLayout()
+
+        self.btn_make_plot=QPushButton("Update DQM Plot")
+        self.btn_make_plot.clicked.connect(self.update_dqm_plot) 
+        right_layout.addWidget(self.btn_make_plot)
+        right_layout.addStretch() 
+
+
 
         # Add layouts to top layout
-        top_layout.addLayout(left_layout, stretch=3)
-        top_layout.addWidget(self.plot_canvas, stretch=7)
+        top_layout.addLayout(left_layout, stretch=2)
+        top_layout.addLayout(mid_layout, stretch=9)
+        top_layout.addLayout(right_layout, stretch=2)
+        #-----------------------------------------------------------------------------------------------
 
+
+
+
+        #-----------------------------------------------------------------------------------------------
         # Bottom layout for terminal
         self.terminal_output = QTextEdit()
         self.terminal_output.setReadOnly(True)
@@ -182,13 +215,20 @@ class MainWindow(QMainWindow):
         terminal_layout = QVBoxLayout()
         terminal_layout.addWidget(self.terminal_output)
         terminal_layout.addWidget(self.terminal_input)
+        #-----------------------------------------------------------------------------------------------
 
+
+
+        #-----------------------------------------------------------------------------------------------
         # Add layouts to main layout
-        main_layout.addLayout(top_layout)
-        main_layout.addLayout(terminal_layout)
+        main_layout.addLayout(top_layout, stretch=8)
+        main_layout.addLayout(terminal_layout, stretch=2)
 
         # Set the main layout as the central widget's layout
         central_widget.setLayout(main_layout)
+        #-----------------------------------------------------------------------------------------------
+
+
 
         # Setup QProcess for terminal
         # Show the output of this shell in the GUI
@@ -239,6 +279,14 @@ class MainWindow(QMainWindow):
     # Processing: display output to the current terminal
     def read_output_processing(self):
         output = self.process_processing.readAllStandardOutput().data().decode()
+        # Check if the processing finished
+        if self.__PROCESSING_FINISHED_LABLE in output:
+            self.__PROCESSING_FINISHED_COUNTER +=1
+            self.update_dqm_plot()
+            if self.__PROCESSING_FINISHED_COUNTER==self.daq_setting["runs"]:
+                self.__PROCESSING_FINISHED = True
+                self.execute_command("echo 'All processing finished.'")
+
         if len(output)>0:
             print(output, end=output[-1])
 
@@ -260,12 +308,16 @@ class MainWindow(QMainWindow):
             self.__terminal_CR=False  
 
         # Start processing if run finished
-        if self.__RUN_FINISHED in output and self.__PROCESSING_ENABLED:
-            print("Running processing in background")
-            time.sleep(0.2)
-            self.processing_start()
-        if self.__ACQUISITION_FINISHED in output:
-            self.__PROCESSING_ENABLED=False
+        if self.__RUN_FINISHED_LABLE in output:
+            self.__RUN_FINISHED_COUNTER+=1
+            if self.__PROCESSING_ENABLED:
+                print("Running processing in background")
+                time.sleep(0.2)
+                self.processing_start()
+        if self.__ACQUISITION_FINISHED_LABLE in output:
+            self.__PROCESSING_ENABLED  = False
+            self.__ACQUISITION_ONGOING = False
+            self.execute_command("echo 'Running processing on the last file. Please check the main ternimal for progress.'")
 
     def append_to_terminal(self, text):
         self.terminal_output.moveCursor(QTextCursor.MoveOperation.End)
@@ -284,7 +336,11 @@ class MainWindow(QMainWindow):
     # Send interrupt singal to a process
     def send_sigint(self, process):
         if process is not None:
-            os.kill(process.processId(), signal.SIGINT)    
+            os.kill(process.processId(), signal.SIGINT)
+
+    def send_sigkill(self, process):
+        if process is not None:
+            os.kill(process.processId(), signal.SIGTERM)                
     # -------------------------------------------------------------------
 
 
@@ -365,15 +421,22 @@ class MainWindow(QMainWindow):
         if not self.__daqd_is_running:
             self.execute_command("echo DAQ driver is not running. Please start the driver first.")
 
-        if not self.daq_setting["Running"]:
+        if not self.__ACQUISITION_ONGOING:
+            self.__ACQUISITION_ONGOING = True
             if self.daq_setting["Series number auto"]==True:
                 self.daq_setting["Series number"] = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
 
+
+            # Get the filename prefix
+            series_number=self.daq_setting["Series number"]
+            self.cb_daq_series_number.setText(series_number)
+            series_raw_dir = self.data_dir+'/raw/'+series_number
+            series_raw_prefix = f"{series_raw_dir}/{series_number}"
+            os.makedirs(series_raw_dir, exist_ok=True)
+
             for irun in range(self.daq_setting["runs"]):
-                series_number=self.daq_setting["Series number"]
-                self.cb_daq_series_number.setText(series_number)
                 command = f"""pushd petsysbuild
-./acquire_sipm_data --config {self.config_dir}/config.ini -o {self.data_dir+'/raw/'+series_number+f'_{irun}'} --mode {self.daq_setting['mode'].lower()} --time {self.daq_setting['time']} {'--enable-hw-trigger' if self.daq_setting['HW trigger'] else ''}
+./acquire_sipm_data --config {self.config_dir}/config.ini -o {series_raw_prefix}_{irun} --mode {self.daq_setting['mode'].lower()} --time {self.daq_setting['time']} {'--enable-hw-trigger' if self.daq_setting['HW trigger'] else ''}
 popd
     """
                 
@@ -382,35 +445,59 @@ popd
                 self.execute_command(f"echo Run {irun}/{self.daq_setting['runs']}")
                 self.execute_command("echo =====================================================")
                 self.execute_command(command)
-                self.execute_command(f"echo {self.__RUN_FINISHED}")
+                self.execute_command(f"echo {self.__RUN_FINISHED_LABLE}")
                 self.execute_command("echo")
 
-            self.execute_command(f"echo {self.__ACQUISITION_FINISHED}")
+            self.execute_command(f"echo {self.__ACQUISITION_FINISHED_LABLE}")
 
         else:
             return
     
+
     def processing_start(self):
         if not self.__directory_set:
             self.execute_command("echo Directory not set. Please set the config and data directory first")
-        raw_file_list = glob.glob(self.data_dir+'/raw/'+self.daq_setting["Series number"]+"*.rawf")
+
+        # Get the diretory ready
+        series_raw_prefix = self.data_dir+'/raw/'+self.daq_setting["Series number"] + "/"+ self.daq_setting["Series number"]
+        series_process_dir = self.data_dir+'/processed/' +self.daq_setting["Series number"] + "/"
+        os.makedirs(series_process_dir, exist_ok=True)
+
+        # Get a list of file to process
+        raw_file_list = glob.glob(series_raw_prefix+"*.rawf")
         unprocessed_file_list = []
         output_single_list=[]
         output_coinc_list=[]
         for file in raw_file_list:
-            processed_single_filename=(self.data_dir+'/processed/'+os.path.basename(file)).replace(".rawf", "_single.root")
+            processed_single_filename=(series_process_dir + os.path.basename(file)).replace(".rawf", "_single.root")
             if not os.path.exists(processed_single_filename):
                 unprocessed_file_list.append(file)
                 output_single_list.append(processed_single_filename)
                 output_coinc_list.append(processed_single_filename.replace("_single.root", "_coinc.root"))
+
+        # Run processing on all files
         for i in range(len(unprocessed_file_list)):
-            command=f"""pushd petsysbuild
+
+            fname_coinc = output_coinc_list[i]
+            fname_singles = fname_coinc.replace("_coinc.root", "_single.root")
+            fname_recon = fname_coinc.replace("_coinc.root", "_coinc_triggered.pkl")
+            command=f"""
+echo "Convert raw to singles and coincidence"
+pushd petsysbuild
 ./convert_raw_to_singles --config {self.config_dir}/config.ini -i {unprocessed_file_list[i].replace('.rawf','')} -o {output_single_list[i]} --writeRoot
 ./convert_raw_to_coincidence --config {self.config_dir}/config.ini -i {unprocessed_file_list[i].replace('.rawf','')} -o {output_coinc_list[i]} --writeRoot
 popd
+
+echo "Convert coincidence to hits and events, and do reconstruction"
 pushd processing
-./run_processing.sh {output_coinc_list[i]}
+./run_processing.sh {fname_coinc}
+
+echo "Generate data quality plots (trigger rate, energy histograms)"
+python script_data_quality.py {fname_singles} {fname_coinc} {fname_recon}
 popd
+
+echo "{self.__PROCESSING_FINISHED_LABLE}"
+
 """ 
             self.execute_command_processing(command)
 
@@ -419,12 +506,33 @@ popd
         self.acquire_start(processing=True)
 
     def acquire_stop(self):
-        self.send_sigint(self.process)
-        self.send_sigint(self.process_processing)
+        self.send_sigkill(self.process)
+        self.send_sigkill(self.process_processing)
+        self.process.start("bash")
+        self.process_processing.start("bash")
+
+    def update_dqm_plot(self, runs_to_plot=None):
+        series_process_prefix = self.data_dir+'/processed/' + self.daq_setting["Series number"] + "/" + self.daq_setting["Series number"] 
+
+        # Check the processed file, and find the latest one
+        # processed_list = series_process_prefix+f"_{self.__PROCESSING_FINISHED_COUNTER}_data_quality.joblib"
+        processed_list = sorted(glob.glob(series_process_prefix+f"_*_data_quality.joblib"), key=os.path.getmtime)
+        plotdata = joblib.load(processed_list[0])
+
+        # Clear the axis
+        for ax in fig.axes:
+            ax.clear()
+
+        fig = dqm.make_plots(plotdata, fig=self.sc.fig, plot_singles_list=None, plot_coinc_list=None)
+        self.sc.draw() # Don't forget this line...
+
+        return
                
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     main_window = MainWindow()
     main_window.show()
+    main_window.resize(1600, 900) # start up resolution
+
     sys.exit(app.exec())
