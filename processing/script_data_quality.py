@@ -102,7 +102,7 @@ def process_result(fname_singles, fname_coinc, fname_recon):
     tracks_chi2r = []
     for ievent in range(len(tracks)):
         for track in tracks[ievent]:
-            tracks_time.append(track.t0)
+            tracks_time.append(track.t0*1e-9) # ns to s
             track_dof = 3*len(track.hits)-6
             tracks_chi2r.append(track.chi2/track_dof)
 

@@ -26,16 +26,20 @@ namespace fs = filesystem;
 void lin_regress(vector<double> xs,vector<double> ys, double *slopeint);
 int dim;
 int vec_len; 
-double c = 29.7978; //speed of light set here
+double c = 29.18853457; //speed of muons set here
 
-int main(string data_dir){
+int main(int argc, char *argv[]){
+    string data_dir = string(argv[1]);
     // string data_dir = "bat_data6";
     vector<TString> filenames = {};
     //obtain filenames for batches in directory
     for (const auto & entry : fs::directory_iterator(data_dir)){
-        cout << entry.path() << endl;
+        string file_str = entry.path();
         TString filename = TString(entry.path());
-        filenames.push_back(filename);
+        if ((file_str.length() - file_str.find_last_of("/")) < 10){
+            cout << entry.path() << endl;
+            filenames.push_back(filename);
+        }
     }
     map<int,double> pred_offsets; //keeps track of the predicted offsets
     map<int,vector<double>> entry_count; //keeps track of number of tracks fitted, sum of residuals, number of invalid tracks, for each channel

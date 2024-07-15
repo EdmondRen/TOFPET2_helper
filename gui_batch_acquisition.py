@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import *
 
 # Include some functions to make the data quality monitoring plots
 import joblib
+import numpy as np
 from processing import script_data_quality as dqm
 
 
@@ -37,7 +38,9 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.setWindowTitle('TOFPET2 data recorder')
 
+        # Global variables
         self.config_dir="~"
         self.data_dir="~"
         self.__daqd_is_running=False
@@ -52,8 +55,21 @@ class MainWindow(QMainWindow):
         self.__PROCESSING_FINISHED = True
         self.__PROCESSING_FINISHED_COUNTER =-1
         self.__PROCESSING_ENABLED=False
+        self.__DQM_INIT=False
+        self.__DQM_INFO = {"runs_total":0,
+                           "duration":0,
+                           "events_total":0,
+                           "event_rate":0,
+                           "channels":[],
+                           "coinc_pairs":[],
+                           "data_filename_list":[]}
+        self.__DQM_SETTING = {"run_selected":0,
+                              "single_channels_all":[], # Each cell is the absolute ID
+                              "single_channels_selected":[], # Each cell is the absolute ID
+                              "coinc_channels_all":[], # Each cell is a pairl of absolute ID, starting with the larger one 
+                              "coinc_channels_selected":[], # Each cell is a pairl of absolute ID, starting with the larger one 
+                              }
 
-        self.setWindowTitle('TOFPET2 data recorder')
 
         # Create central widget
         central_widget = QWidget()
@@ -138,8 +154,11 @@ class MainWindow(QMainWindow):
         self.checkbox_series_number_auto.setChecked(True)
         self.checkbox_series_number_auto.toggled.connect(self.update_daq_settings)
         self.cb_daq_series_number = QLineEdit("YYYYMMDD_HHMMSS")
+        self.cb_daq_series_number.setReadOnly(True)                
         self.cb_daq_series_number.setMaximumHeight(25)                
-        self.cb_daq_series_number.font().setPointSize(10)                
+        font = self.cb_daq_series_number.font()
+        font.setPointSize(8)
+        self.cb_daq_series_number.setFont(font)
         self.cb_daq_series_number.editingFinished.connect(self.update_daq_settings)
         # self.cb_daq_series_number.setDisabled(True)
         hbox5.addWidget(self.label_daq_series_number,stretch=3)
@@ -188,9 +207,50 @@ class MainWindow(QMainWindow):
         # Right for plot control
         right_layout=QVBoxLayout()
 
-        self.btn_make_plot=QPushButton("Update DQM Plot")
-        self.btn_make_plot.clicked.connect(self.update_dqm_plot) 
-        right_layout.addWidget(self.btn_make_plot)
+        # Data overview box
+        right_group1=QGroupBox("Series overview")
+        right_group1_layout=QVBoxLayout()
+        self.txt_dqm = QTextBrowser()
+        self.txt_dqm.setMinimumHeight(48)
+        self.txt_dqm.setMaximumHeight(120)
+        self.txt_dqm.setText("Runs: \nDuration[s]: \nTotal events: \nEvent rate [Hz]: \nActive channels: \nActive coinc. pairs: ")
+        right_group1_layout.addWidget(self.txt_dqm)
+        right_group1.setLayout(right_group1_layout)
+        right_group1.setMaximumHeight(180)
+        # Plot configurations
+        self.btn_dqm_update=QPushButton("Get DQM info of series")
+        self.btn_dqm_update.clicked.connect(self.init_dqm_info) 
+        right_group2=QHBoxLayout()
+        self.label_dqm_run = QLabel("#Run to plot")
+        self.cb_dqm_run = QComboBox()
+        self.cb_dqm_run.currentIndexChanged.connect(self.redraw_different_run)
+        right_group2.addWidget(self.label_dqm_run)
+        right_group2.addWidget(self.cb_dqm_run)        
+        # Selection box for single channels
+        right_group3=QGroupBox("Single channel selection")
+        right_group3_layout=QVBoxLayout()
+        self.list_single_channel = QListWidget()     
+        self.list_single_channel.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)        
+        self.list_single_channel.itemSelectionChanged.connect(self.redraw_single_channel)
+        self.btn_single_channel_select_all=QPushButton("(Un)Select all")
+        right_group3_layout.addWidget(self.list_single_channel)
+        right_group3_layout.addWidget(self.btn_single_channel_select_all)
+        right_group3.setLayout(right_group3_layout)
+        # Selection box for coinc channels
+        right_group4=QGroupBox("Coinc. channel selection")
+        right_group4_layout=QVBoxLayout()
+        self.list_coinc_channel = QListWidget()     
+        self.list_coinc_channel.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)       
+        self.btn_coinc_channel_select_all=QPushButton("(Un)Select all")
+        right_group4_layout.addWidget(self.list_coinc_channel)
+        right_group4_layout.addWidget(self.btn_coinc_channel_select_all)
+        right_group4.setLayout(right_group4_layout)
+        # Add everything to right panel       
+        right_layout.addWidget(self.btn_dqm_update)
+        right_layout.addWidget(right_group1)
+        right_layout.addLayout(right_group2)
+        right_layout.addWidget(right_group3)
+        right_layout.addWidget(right_group4)
         right_layout.addStretch() 
 
 
@@ -282,7 +342,7 @@ class MainWindow(QMainWindow):
         # Check if the processing finished
         if self.__PROCESSING_FINISHED_LABLE in output:
             self.__PROCESSING_FINISHED_COUNTER +=1
-            self.update_dqm_plot()
+            self.update_dqm_info()
             if self.__PROCESSING_FINISHED_COUNTER==self.daq_setting["runs"]:
                 self.__PROCESSING_FINISHED = True
                 self.execute_command("echo 'All processing finished.'")
@@ -377,9 +437,11 @@ class MainWindow(QMainWindow):
 
         if self.checkbox_series_number_auto.isChecked():
             self.daq_setting["Series number auto"]=True
+            self.cb_daq_series_number.setReadOnly(True)
         else:
             self.daq_setting["Series number auto"]=False
             self.daq_setting["Series number"]=self.cb_daq_series_number.text()
+            self.cb_daq_series_number.setReadOnly(False)
 
         print(self.daq_setting)
 
@@ -506,27 +568,138 @@ echo "{self.__PROCESSING_FINISHED_LABLE}"
         self.acquire_start(processing=True)
 
     def acquire_stop(self):
+        # Terminate
         self.send_sigkill(self.process)
         self.send_sigkill(self.process_processing)
-        self.process.start("bash")
-        self.process_processing.start("bash")
+        time.sleep(0.3)
 
-    def update_dqm_plot(self, runs_to_plot=None):
-        series_process_prefix = self.data_dir+'/processed/' + self.daq_setting["Series number"] + "/" + self.daq_setting["Series number"] 
+        # Restart the two child process
+        self.process = QProcess(self)
+        self.process.readyReadStandardOutput.connect(self.read_output)
+        self.process.readyReadStandardError.connect(self.read_error)
+        self.process.start('bash')
+        self.process_processing = QProcess(self)
+        self.process_processing.start('bash') 
+        self.process_processing.readyReadStandardOutput.connect(self.read_output_processing)
+        self.process_processing.readyReadStandardError.connect(self.read_error_processing)
 
-        # Check the processed file, and find the latest one
+    def reset_dqm_info(self):
+        self.__DQM_INIT=False
+        self.__DQM_INFO = {"runs_total":0,
+                           "duration":0,
+                           "events_total":0,
+                           "event_rate":0,
+                           "channels":[],
+                           "coinc_pairs":[],
+                           "data_filename_list":[]}
+        self.__DQM_SETTING = {"run_selected":0,
+                              "single_channels_all":[], # Each cell is the absolute ID
+                              "single_channels_selected":[], # Each cell is the absolute ID
+                              "coinc_channels_all":[], # Each cell is a pairl of absolute ID, starting with the larger one 
+                              "coinc_channels_selected":[], # Each cell is a pairl of absolute ID, starting with the larger one 
+                              }  
+        self.processed_file_list=[]
+
+# 20240712_162718
+    def init_dqm_info(self):
+        self.reset_dqm_info()
+        self.update_dqm_info()
+        return
+
+    def update_dqm_info(self):
+         # Find all the processed file of this series
+        series_process_prefix = self.data_dir+'/processed/' + self.daq_setting["Series number"] + "/" + self.daq_setting["Series number"]
+        self.processed_file_list = sorted(glob.glob(series_process_prefix+f"_*_data_quality.joblib"), key=os.path.getmtime)
+        if len(self.processed_file_list)==0:
+            print(f"No file found starting with {series_process_prefix}. Does the series exist? Is it processed?")
+            return        
+
+        # Set the dqm information dict
+        files_to_check  = self.processed_file_list[self.__DQM_INFO["runs_total"]:]
+        print("Processed files found:", self.processed_file_list)
+        for fname in files_to_check:
+            data=joblib.load(fname)
+            channel_list = list(data["hist1_single_rate"].keys())
+            coinc_list = list(data["hist3_coinc_rate"].keys())
+            events = np.sum([data["hist1_single_rate"][ch][0] for ch in channel_list])
+            ch=channel_list[0]
+            duration = data["hist1_single_rate"][ch][1][-1] - data["hist1_single_rate"][ch][1][0]
+            self.__DQM_INFO['runs_total']+=1
+            self.__DQM_INFO['event_rate'] = (self.__DQM_INFO["events_total"]+events)/(self.__DQM_INFO["duration"]+duration)
+            self.__DQM_INFO['duration']+=duration
+            self.__DQM_INFO['events_total']+=events
+            self.__DQM_INFO['channels'] = list(np.unique(self.__DQM_INFO["channels"]+channel_list))
+            self.__DQM_INFO['coinc_pairs'] = list(np.unique(self.__DQM_INFO["coinc_pairs"]+coinc_list, axis=0))
+            self.__DQM_INFO['data_filename_list'] += fname
+
+        # Update the information text box on top right
+        self.txt_dqm.setText(f"""Runs: {self.__DQM_INFO['runs_total']}
+Duration [s]: {self.__DQM_INFO['duration']:.1f}
+Total events: {self.__DQM_INFO['events_total']:.0f}
+Event rate [Hz]: {self.__DQM_INFO['event_rate']:.1f}
+Active channels: {len(self.__DQM_INFO['channels'])}
+Active coinc. pairs: {len(self.__DQM_INFO['coinc_pairs'])}""")
+
+        # Update the drop down list of runs
+        self.cb_dqm_run.clear()
+        for i in range(self.__DQM_INFO['runs_total']):
+            self.cb_dqm_run.addItem(str(i))
+        self.cb_dqm_run.setCurrentIndex(self.__DQM_INFO['runs_total']-1)
+
+        # Update the single/coinc channel selection list
+        # Remove existing items first
+        self.list_single_channel.clear()
+        for i in range(len(channel_list)):
+            c=QListWidgetItem(f"{channel_list[i]}")
+            self.list_single_channel.addItem(c)
+        self.list_single_channel.update()
+        # 20240711_195553
+        
+        # for i in reversed(range(self.chekbox_single_channel_layout.count())): 
+        #     self.chekbox_single_channel_layout.itemAt(i).widget().setParent(None)
+        # self.checkbox_single_channels=[]
+        # for i in range(len(channel_list)):
+        #     print("add checkbox",i)
+        #     c=QCheckBox(f"{channel_list[i]}")
+        #     self.chekbox_single_channel_layout.addWidget(c)
+        #     self.checkbox_single_channels.append(c)
+        # self.chekbox_single_channel_layout.update()
+
+
+
+        # Make the initial plot
+        self.update_dqm_plot(run_to_plot=-1)
+        
+
+
+
+    def update_dqm_plot(self, run_to_plot=None):
+        # series_process_prefix = self.data_dir+'/processed/' + self.daq_setting["Series number"] + "/" + self.daq_setting["Series number"] 
         # processed_list = series_process_prefix+f"_{self.__PROCESSING_FINISHED_COUNTER}_data_quality.joblib"
-        processed_list = sorted(glob.glob(series_process_prefix+f"_*_data_quality.joblib"), key=os.path.getmtime)
-        plotdata = joblib.load(processed_list[0])
+        # processed_list = sorted(glob.glob(series_process_prefix+f"_*_data_quality.joblib"), key=os.path.getmtime)
+        if run_to_plot is None:
+            self.update_dqm_info()
+            run_to_plot = -1
+        fname = self.processed_file_list[run_to_plot]
+
+
+        plotdata = joblib.load(fname)
 
         # Clear the axis
-        for ax in fig.axes:
+        for ax in self.sc.fig.axes:
             ax.clear()
-
+        # Make new plots
         fig = dqm.make_plots(plotdata, fig=self.sc.fig, plot_singles_list=None, plot_coinc_list=None)
         self.sc.draw() # Don't forget this line...
 
         return
+    
+    def redraw_single_channel(self):
+        return
+    
+    def redraw_different_run(self):
+        run = self.cb_dqm_run.currentIndex()
+        self.update_dqm_plot(run_to_plot=run)
                
 
 if __name__ == '__main__':

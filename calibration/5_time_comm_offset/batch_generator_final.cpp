@@ -24,60 +24,107 @@
 
 using namespace std;
 namespace fs = filesystem;
+using recursive_directory_iterator = filesystem::recursive_directory_iterator;
 
 double rand_gen(double low, double up);
 
-int main(string data_dir, int num_batches) {
+int main(int argc, char *argv[]) {
+    //data_dir -> where the raw data is, recorded_dir -> where the new data should be
+    string data_dir = string(argv[1]);
+    string recorded_dir = string(argv[2]);
     // string data_dir = "test_data5"; //Directory for raw data
     int valid_entries = 0;
     map<int,vector<pair<int,int>>> ch_tracks;
+    map<int,double> true_offsets;
     vector<TString> filenames = {};
-    for (const auto & entry : fs::directory_iterator(data_dir)){ //Store filenames, generate filenames for 'recorded' files
+    vector<TString> rec_filenames = {};
+    ofstream truth_offsets;
+    for (const auto & entry : recursive_directory_iterator(data_dir)){ //Store filenames, generate filenames for 'recorded' files
         cout << entry.path() << endl;
         TString filename = TString(entry.path());
-        filenames.push_back(filename);
+        string file_str = entry.path();
+        if(file_str.substr(file_str.find_last_of(".")+1)=="root"){
+            string cur_file_directory = file_str.substr(0,file_str.find_last_of("/"));
+            string super_dir = cur_file_directory.substr(0,cur_file_directory.find_last_of("/"));
+            int len_rec_file_name = cur_file_directory.find_last_of("/")-super_dir.find_last_of("/");
+            string rec_file_start = file_str.substr(super_dir.find_last_of("/")+1,len_rec_file_name-1);
+            TString rec_filename(recorded_dir + "/rec_" + rec_file_start + ".root");
+            cout << rec_filename << endl;
+            filenames.push_back(filename);
+            rec_filenames.push_back(rec_filename);
+        }
     }
+    truth_offsets.open(recorded_dir + "/truth_offsets.txt"); //Write true offsets into a text file.
+    truth_offsets << "channel_id true_offset" << endl;
     for (int i = 0; i < filenames.size();i++){ //Iterate over raw data files
         int track_num = 0;
         TString filename = filenames[i];
+        TString rec_filename = rec_filenames[i];
         TFile f(filename);
         TIter iter1(f.GetListOfKeys());
         TKey* treekey = (TKey*)iter1();
         TTree* main_tree = (TTree*) treekey->ReadObj();
+        TFile g(rec_filename,"recreate"); //Make new file for recorded coordinates files
+        TTree* rec_tree = new TTree("Recorded","Recorded Coordinates");
+        cout << "Filename: " << filename << endl;
+        printf("Main Tree Name: %s\n",main_tree->GetName());
+        printf("Recorded Tree Name: %s\n",rec_tree->GetName());
         // main_tree->GetListOfBranches()->Print();
-        string branch_names[14];
-        vector<double> *hit_x = nullptr;
-        vector<double> *hit_y = nullptr;
-        vector<double> *hit_z = nullptr;
-        vector<double> *hit_t = nullptr;
-        vector<int> *hit_det_id = nullptr;
+        string branch_names[54];
+        vector<double> *digi_x = nullptr;
+        vector<double> *digi_y = nullptr;
+        vector<double> *digi_z = nullptr;
+        vector<double> *digi_hit_t = nullptr;
+        vector<int> *det_id = nullptr;
+        vector<int> *pdg_id = nullptr;
         // list<int> id_list;
         for (int j = 0; j < main_tree->GetListOfBranches()->GetEntries(); j++){
             branch_names[j] = main_tree->GetListOfBranches()->At(j)->GetName();
             // cout << (branch_names[i]) << endl;
         }
-        main_tree->SetBranchAddress("hit_x", &hit_x); //Set branch addresses
-        main_tree->SetBranchAddress("hit_y", &hit_y);
-        main_tree->SetBranchAddress("hit_z", &hit_z);
-        main_tree->SetBranchAddress("hit_t", &hit_t);
-        main_tree->SetBranchAddress("hit_det_id", &hit_det_id);
+        main_tree->SetBranchAddress("Digi_x", &digi_x); //Set branch addresses
+        main_tree->SetBranchAddress("Digi_y", &digi_y);
+        main_tree->SetBranchAddress("Digi_z", &digi_z);
+        main_tree->SetBranchAddress("Digi_time", &digi_hit_t);
+        main_tree->SetBranchAddress("Digi_det_id", &det_id);
+        main_tree->SetBranchAddress("Digi_pdg_id", &pdg_id);
+        rec_tree->Branch("Digi_x", &digi_x);
+        rec_tree->Branch("Digi_y", &digi_y);
+        rec_tree->Branch("Digi_z", &digi_z);
+        rec_tree->Branch("Digi_time", &digi_hit_t);
+        rec_tree->Branch("Digi_det_id", &det_id);
         for (int k=0; k < main_tree->GetBranch(branch_names[0].c_str())->GetEntries(); k++){
             main_tree->GetEntry(k);
-            for (int l=0; l < hit_t->size(); l++){
-                int ch_id = (*hit_det_id)[l]; //target channel
-                pair<int,int> save_pair = {i,track_num}; //recording the file and entry number in recorded file
-                if (ch_tracks.count((*hit_det_id)[l]) == 0){ //checking if channel already has entry in ch_tracks
-                    ch_tracks.insert(pair<int,vector<pair<int,int>>>(ch_id,vector<pair<int,int>>()));
-                    ch_tracks[(ch_id)].push_back(save_pair);
-                }
-                else {
-                    ch_tracks[(ch_id)].push_back(save_pair);
+            for (int j=0; j < det_id->size(); j++){ //Generate true offsets
+                // id_list.push_back((*det_id)[j]);
+                if (true_offsets.count((*det_id)[j]) == 0){
+                    true_offsets[(*det_id)[j]] = rand_gen(-9,9);
+                    truth_offsets << (*det_id)[j] << " " << true_offsets[(*det_id)[j]] << endl;
                 }
             }
-            track_num++;
-        }
+  
+            //SELECTION CRITERIA SET HERE
+            if ((digi_hit_t->size() < 7)&&(digi_hit_t->size() > 3)&&((count((*pdg_id).begin(),(*pdg_id).end(),13)==(*pdg_id).size())||(count((*pdg_id).begin(),(*pdg_id).end(),-13)==(*pdg_id).size()))){
+                std::set<float> unique(digi_y->begin(),digi_y->end());
+                if (unique.size() == digi_y->size()){ //Checking if track has unique y values for each hit
+                    for (int l=0; l < digi_hit_t->size(); l++){
+                        int ch_id = (*det_id)[l]; //target channel
+                        pair<int,int> save_pair = {i,track_num}; //recording the file and entry number in recorded file
+                        (*digi_hit_t)[l] += true_offsets[(*det_id)[l]]; //adjusting digitized t for hit according to offset values 
+                        if (ch_tracks.count((*det_id)[l]) == 0){ //checking if channel already has entry in ch_tracks
+                            ch_tracks.insert(pair<int,vector<pair<int,int>>>(ch_id,vector<pair<int,int>>()));
+                            ch_tracks[(ch_id)].push_back(save_pair);
+                        }
+                        else {
+                            ch_tracks[(ch_id)].push_back(save_pair);
+                        }
+                    }
+                    track_num++;
+                    rec_tree->Fill();
+                }
+            }
             //main_tree->GetBranch(branch_names[0].c_str())->GetEntries()-1
-        
+        }
         // cout << "id_list size " << id_list.size() << endl;
         // cout << "true_offsets size " << true_offsets.size() << endl;
         // list<int>::iterator it;
@@ -85,8 +132,11 @@ int main(string data_dir, int num_batches) {
         //     cout << '\n' << *it;
         // }
         main_tree->ResetBranchAddresses();
+        g.Write();
+        g.Close();
         f.Close();
     }
+    truth_offsets.close();
 
     // for (auto it = ch_tracks.cbegin(); it != ch_tracks.cend(); ++it){
     //     cout << "channel: " << it->first << ", tracks: [";
@@ -129,7 +179,7 @@ int main(string data_dir, int num_batches) {
     int cur_file_ind;
     int start_ind = 0;
     int end_ind = 50;
-    for (int i=0; i<num_batches;i++){
+    for (int i=0; i<20;i++){
         //Shuffling
         unsigned seed = chrono::system_clock::now().time_since_epoch().count();
         mt19937 gen(seed);
@@ -143,7 +193,7 @@ int main(string data_dir, int num_batches) {
         }
         start_ind = 0 + (i*50);
         end_ind = 50 + (i*50);
-        TString bat_filename(data_dir + "/" + to_string(i) + ".root"); //Batch filename
+        TString bat_filename(recorded_dir + "/" + to_string(i) + ".root"); //Batch filename
         vector<int> *ch_ind = nullptr; //Initialize pointers
         vector<double> *bat_x = nullptr;
         vector<double> *bat_y = nullptr;
@@ -183,16 +233,16 @@ int main(string data_dir, int num_batches) {
         for (map<int,int>::iterator it = entrycount.begin(); it != entrycount.end(); it++){
             int fileind = it->first;
             int number_of_entries = it->second;
-            TString filename = filenames[fileind];
-            unique_ptr<TFile> f{TFile::Open(filename,"read")};
+            TString rec_filename = rec_filenames[fileind];
+            unique_ptr<TFile> f{TFile::Open(rec_filename,"read")};
             TIter iter1(f->GetListOfKeys());
             TKey* treekey = (TKey*)iter1();
             TTree* main_tree = (TTree*) treekey->ReadObj();
-            main_tree->SetBranchAddress("hit_x", &bat_x);
-            main_tree->SetBranchAddress("hit_y", &bat_y);
-            main_tree->SetBranchAddress("hit_z", &bat_z);
-            main_tree->SetBranchAddress("hit_t", &bat_hit_t);
-            main_tree->SetBranchAddress("hit_det_id", &det_id);
+            main_tree->SetBranchAddress("Digi_x", &bat_x);
+            main_tree->SetBranchAddress("Digi_y", &bat_y);
+            main_tree->SetBranchAddress("Digi_z", &bat_z);
+            main_tree->SetBranchAddress("Digi_time", &bat_hit_t);
+            main_tree->SetBranchAddress("Digi_det_id", &det_id);
             for (int p = 0; p < number_of_entries;p++){
                 vector<int> bat_vec = bat_entrylist[bat_entry_count];
                 (*ch_ind) = {bat_vec[0]};
