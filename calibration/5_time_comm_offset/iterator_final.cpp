@@ -29,6 +29,7 @@ int vec_len;
 double c = 29.18853457; //speed of muons set here
 
 int main(int argc, char *argv[]){
+    //data_dir->where data is located
     string data_dir = string(argv[1]);
     // string data_dir = "bat_data6";
     vector<TString> filenames = {};

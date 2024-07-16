@@ -31,6 +31,7 @@ using recursive_directory_iterator = filesystem::recursive_directory_iterator;
 double rand_gen(double low, double up);
 
 int main(int argc, char *argv[]) {
+    //data_dir-> raw data, output_dir-> where histogram should be stored
     string data_dir = string(argv[1]);
     string output_dir = string(argv[2]);
     // string data_dir = "full_data5"; //Folder containing raw data
@@ -110,7 +111,7 @@ int main(int argc, char *argv[]) {
                         double dist = (sqrt(pow(pos_1[0]-pos_2[0],2)+pow(pos_1[1]-pos_2[1],2)+pow(pos_1[2]-pos_2[2],2)));
                         (velocity) = abs(dist/(pos_1[3]-pos_2[3]));
                         velo_hist->Fill(velocity);
-			//cout << velocity << endl;
+			            //cout << velocity << endl;
                     }
                     // (velocity) = 29.9792458*sqrt(pow((*hit_particle_energy)[ind_1],2) - pow(105,2))/(*hit_particle_energy)[ind_1];
                     // velo_hist->Fill(velocity);

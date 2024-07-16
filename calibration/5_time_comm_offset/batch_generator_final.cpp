@@ -43,12 +43,12 @@ int main(int argc, char *argv[]) {
         cout << entry.path() << endl;
         TString filename = TString(entry.path());
         string file_str = entry.path();
-        if(file_str.substr(file_str.find_last_of(".")+1)=="root"){
+        if(file_str.substr(file_str.find_last_of(".")+1)=="root"){ //Looks for .root files
             string cur_file_directory = file_str.substr(0,file_str.find_last_of("/"));
             string super_dir = cur_file_directory.substr(0,cur_file_directory.find_last_of("/"));
             int len_rec_file_name = cur_file_directory.find_last_of("/")-super_dir.find_last_of("/");
             string rec_file_start = file_str.substr(super_dir.find_last_of("/")+1,len_rec_file_name-1);
-            TString rec_filename(recorded_dir + "/rec_" + rec_file_start + ".root");
+            TString rec_filename(recorded_dir + "/rec_" + rec_file_start + ".root"); //Recorded filename
             cout << rec_filename << endl;
             filenames.push_back(filename);
             rec_filenames.push_back(rec_filename);
@@ -191,6 +191,7 @@ int main(int argc, char *argv[]) {
             map<int,vector<pair<int,int>>>::iterator it3 = ch_tracks.find(it->first);
             it->second = shuffled;
         }
+        //Each batch has 50 tracks
         start_ind = 0 + (i*50);
         end_ind = 50 + (i*50);
         TString bat_filename(recorded_dir + "/" + to_string(i) + ".root"); //Batch filename
